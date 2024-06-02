@@ -13,9 +13,16 @@ from urllib.parse import unquote, urlparse
 import sqlite3
 import pandas as pd
 import dateutil.parser
-# from pyspark import SparkContext, SparkSession
+
+
+import pyspark
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.master("local[*]").appName('cc_count_domains').getOrCreate()
+
+
 
 start = time.process_time()
+
 
 # Internal
 SRC_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -27,8 +34,7 @@ class cc_reader:
         Common Crawl reader class. Designed to read common crawl archives from the `archive` directory
         And write output to the database connection `conn`
     """
-
-
+    
     def __init__(
         self,
         archives,
@@ -44,29 +50,32 @@ class cc_reader:
             'link_destination': [], 
             'source_archive': [], 
             'is_valid': []})
-
-
-
-    def read_warc_archives(self):
-        df = self.output
-        for archive in self.archives:
-            records = []
+        
+    
+    @staticmethod
+    def process_warc_arhive_stream(archive):
+        """
+            Accepts a warc archive and processes records in archive as a stream
             
-            print('before iterating records', time.process_time() - start)
+            Args:
+                archive {str}: Location of warc archive to be processed
+        """
+        processed_records = 0
+        records=[]
+        
+        
             
-            num_records = 0
-            with open(archive, 'rb') as stream:
-                for record in ArchiveIterator(stream):
-                    if record.rec_type == 'response':
-                        num_records +=1
-                        if num_records >= 10000: break
-                        try:
-                            parser = BeautifulSoup(
-                                record.content_stream().read(), features="html.parser")
-                        except:
-                            continue
+        with open(archive, 'rb') as stream:
+            for record in ArchiveIterator(stream):
+                if record.rec_type == 'response':
+                    processed_records +=1
+                    # if processed_records >= 1667 : break
+                    try:
+                        parser = BeautifulSoup(
+                            record.content_stream().read(), features="html.parser")
+                        
                         links = parser.find_all("a")
-                        print(f"{num_records}: Processing {record.rec_headers['WARC-Target-URI']}")
+                        print(f"{processed_records}: Processing {record.rec_headers['WARC-Target-URI']}")
                                     
                         if links:
                             for link in links:
@@ -75,19 +84,37 @@ class cc_reader:
                                     
                                     link_origin = record.rec_headers['WARC-Target-URI']
                                     link_destination = href
-                                    source_archive = archive.split('/')[-1]
-                                        
+                                    source_archive = archive.split('/')[-1]     
+                                    
                                     records.append((link_origin, link_destination, source_archive, True))
                                     
-                                    
-        self.output = pd.DataFrame(records, columns = ['link_origin', 'link_destination', 'source_archive', 'is_valid'])
 
+                                    if processed_records%2000 == 0:
+                                        conn = sqlite3.connect(f"{PROJECT_DIR}/db/common-crawl-project.db")
+                                        pd.DataFrame(records, columns = ['link_origin', 'link_destination', 'source_archive', 'is_valid']).to_sql(name='links', con=conn, if_exists='append', index=False)
+                                        conn.close()
+                                        records.clear()
+                                
+                    except:
+                        continue
+        
+        output = pd.DataFrame(records, columns = ['link_origin', 'link_destination', 'source_archive', 'is_valid'])
+        return output
+        
 
+    def read_warc_archives(self):
+        rdd = spark.sparkContext.parallelize(self.archives)
+        
+        output_rdd = rdd.map(self.process_warc_arhive_stream)        
+        rdd_output = output_rdd.collect()
+        
+        self.output = pd.concat(rdd_output)
+        
     def insert_data_to_db(self, conn):
         """
             Inserts self.output to database
         """
-        
+        print(self.output)
         self.output.to_sql(name='links', con=conn, if_exists='append', index=False)
 
 
@@ -102,13 +129,10 @@ def main():
         cc_archives.append(f"{PROJECT_DIR}/raw/{file}")
     
     reader = cc_reader(cc_archives)
-    print('create_reader', time.process_time() - start)
     reader.read_warc_archives()
     reader.insert_data_to_db(conn)
-    print('insert_data_to_db', time.process_time() - start)
+
     
     
 if __name__ == '__main__':
-    # spark = SparkSession.builder.appName("common-crawl-project").getOrCreate()
     main()
-    # spark.stop()

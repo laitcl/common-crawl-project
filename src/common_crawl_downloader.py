@@ -19,7 +19,12 @@ def download_common_crawl_resource(filename, destination='raw/'):
 
 if __name__ == '__main__':
     files_to_download = [
-        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00000.warc.gz"
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00000.warc.gz",
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00001.warc.gz",
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00002.warc.gz",
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00003.warc.gz",
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00004.warc.gz",
+        "crawl-data/CC-MAIN-2024-22/segments/1715971057516.1/warc/CC-MAIN-20240518214304-20240519004304-00005.warc.gz",
     ]
     
     for file in files_to_download:
